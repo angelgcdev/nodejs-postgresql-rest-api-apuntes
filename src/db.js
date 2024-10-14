@@ -1,3 +1,5 @@
+// src/db.js
+
 import pg from "pg";
 import {
   DB_DATABASE,

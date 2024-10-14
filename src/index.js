@@ -1,3 +1,5 @@
+// src/index.js
+
 import express from "express";
 import { PORT } from "./config.js";
 import { router } from "./routes/users.routes.js";

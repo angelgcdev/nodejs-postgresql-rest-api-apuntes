@@ -1,4 +1,9 @@
+// src/controllers/users.controllers.js
 import { pool } from "../db.js";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+
+const saltRounds = 10;
 
 const getUsers = async (req, res) => {
   const { rows } = await pool.query("SELECT * FROM users");
@@ -18,10 +23,14 @@ const getUser = async (req, res) => {
 
 const createUser = async (req, res) => {
   try {
-    const data = req.body;
+    const { name, email, password } = req.body;
+
+    //Encriptar la contraseña
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
     const { rows } = await pool.query(
-      "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *",
-      [data.name, data.email]
+      "INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING *",
+      [name, email, hashedPassword]
     );
     return res.json(rows[0]);
   } catch (error) {
@@ -32,6 +41,36 @@ const createUser = async (req, res) => {
     }
     return res.status(500).json({ message: "Internal server error" });
   }
+};
+
+const loginUser = async (req, res) => {
+  const { email, password } = req.body;
+
+  //Buscar el usuario por email
+  const { rows } = await pool.query("SELECT * FROM users WHERE email = $1", [
+    email,
+  ]);
+
+  if (rows.length === 0) {
+    return res.status(401).json({ message: "Invalid credentials" });
+  }
+
+  const user = rows[0];
+
+  //Comparar la contraseña
+  const match = await bcrypt.compare(password, user.password);
+  if (!match) {
+    return res.status(401).json({ message: "Invalid credentials" });
+  }
+
+  //Crear un token JWT
+  const token = jwt.sign(
+    { id: user.id, email: user.email },
+    process.env.JWT_SECRET,
+    { expiresIn: "1h" }
+  );
+
+  res.json({ token });
 };
 
 const deleteUser = async (req, res) => {
@@ -52,12 +91,14 @@ const updateUser = async (req, res) => {
   const { id } = req.params;
   const data = req.body;
 
+  const hashedPassword = await bcrypt.hash(data.password, saltRounds);
+
   const { rows } = await pool.query(
-    "UPDATE users SET name= $1, email=$2 WHERE id= $3 RETURNING *",
-    [data.name, data.email, id]
+    "UPDATE users SET name= $1, email=$2, password=$3 WHERE id = $4 RETURNING *",
+    [data.name, data.email, hashedPassword, id]
   );
 
   return res.json(rows[0]);
 };
 
-export { getUsers, getUser, createUser, deleteUser, updateUser };
+export { getUsers, getUser, createUser, deleteUser, updateUser, loginUser };
